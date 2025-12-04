@@ -57,21 +57,21 @@ VectorData(;
 
 mutable struct AveragesData{T,I} <: AbstractData{T,I}
     name::String
-    time::T
+    time::Vector{T}
     grid::Grid{T,I}
-    field::Vector{T}
+    field::Array{T,2}
 end
 AveragesData(;
     name::String,
-    time::AbstractFloat,
-    range::Vector{<:AbstractFloat},
-    field::Vector{<:AbstractFloat}
+    time::Vector{<:AbstractFloat},
+    z::Vector{<:AbstractFloat},
+    field::Array{<:AbstractFloat, 2}
 ) = AveragesData(
         name, time, 
         Grid{eltype(time), Int}(
-            1, 1, length(range), 
-            0.0, 0.0, range[end],
-            [0.0], [0.0], range
+            1, 1, length(z), 
+            0.0, 0.0, z[end],
+            [0.0], [0.0], z
         ),
         field
     )
@@ -80,22 +80,6 @@ AveragesData(;
 function Base.getindex(data::ScalarData, i::Int, j::Int, k::Int)
     return data.field[i,j,k]
 end
-
-
-#-------------------------------------------------------------------------------
-#                            Under  Construction
-#-------------------------------------------------------------------------------
-# TODO SubData in order ot realise perfomance with view(data)
-
-
-
-# """ Needed for defining a view method for Data """
-# struct SubData{T,I} <: AbstractData{T,I}
-#     name::String,
-#     time::T
-#     grid::Grid{T,I},
-#     field::SubArray
-# end
 
 
 end

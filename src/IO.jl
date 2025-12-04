@@ -6,9 +6,6 @@ using ..DataStructures
 export load, load!, loadgrid
 export init
 
-# To be removed from exported list
-export file_for_time, Grid_from_file, VAR
-
 
 # ------------------------------------------------------------------------------
 #                           API (exported functions)
@@ -42,7 +39,6 @@ load(dir::String, field::String, time::Real; component::String=".0")::ScalarData
 load(xfile::String, yfile::String, zfile::String)::VectorData = VectorData_from_files(xfile, yfile, zfile)
 
 load(file::String, var::String)::AveragesData = AveragesData_from_NetCDF(file, var)
-load(dir::String, var::String, time::Real, avg::Bool) = load(avgfile_for_time(dir, time), var)
 
 
 """
@@ -330,94 +326,13 @@ end
 # ------------------------------------------------------------------------------
 #                            AveragesData
 # ------------------------------------------------------------------------------
-function VAR(file::String, time::Real, var::String)::Vector{Float32}
-    times = ncread(file, "t")
-    Δt = time
-    index = 1
-    for i ∈ eachindex(times)
-        if abs(times[i] - time) < Δt
-            index = i
-            Δt = abs(times[i] - time)
-        end
-    end
-    return ncread(file, var)[:,index]
-end
-
-
-function AveragesData_from_allNetCDF(;
-        file::String, 
-        var::String, 
-        time::Float64
-    )::AveragesData
-    verbose("AveragesData", file)
-    t = ncread(file, "t")
-    range = ncread(file, "y")
-    data = ncread(file, var)
-    # Find index for time in t:
-    minΔt = 1000000000.
-    index = 0
-    for i in eachindex(t)
-        if abs(t[i]-time) < minΔt
-            index = i
-            minΔt = abs(t[i]-time)
-        end
-    end
-    println("Found averages data for: t = ", t[index])
-    println("Was lokking for: time = ", time)
-    return AveragesData(name=var, time=time, field=data[:,index], range=range)
-end
-
-
-function AveragesData_from_NetCDF(
-        file::String, 
-        var::String
-    )::AveragesData
-    verbose("AveragesData", file)
-    t = ncread(file, "t")
-    range = ncread(file, "z")
-    data = ncread(file, var)
-    return AveragesData(name=var, time=t[1], field=data[:,1], range=range)
-end
-
-
-function avgfile_for_time(dir::String, time::Real)::String
-    println("Looking for t = $(time) ...")
-    filenames = filter(x -> startswith(x, "avg"), readdir(dir, join=false))
-    filenames = filter(x -> !occursin("_all", x), filenames)
-    Δt = time
-    Δt_max = 0.1*time
-    return_file = ""
-    for filename ∈ filenames
-        file = joinpath(dir, filename)
-        t = ncread(file, "t")[1]
-        δt = abs(t - time)
-        if δt < Δt
-            return_file = file
-            Δt = δt
-        end
-    end
-    if Δt > Δt_max
-        @warn "Maximal relative error for _time_ exceeded!"
-    end
-    if return_file==""
-        error("No avg file found for in $(dir).")
-    end
-    printstyled("   $(return_file)     $(ncread(return_file, "t")[1]) \n", color=:cyan)
-    return return_file
-end
-
-
-function AveragesData_to_txtfile(data::AveragesData, outdir::String)
-    file = joinpath(
-        outdir, "avgs_"*string(data.name)*"_"*string(data.time)*".txt"
+function AveragesData_from_NetCDF(file::String, var::String)::AveragesData
+    return AveragesData(
+        name = var,
+        time = ncread(file, "t"),
+        z = ncread(file, "z"),
+        field = ncread(file, var)
     )
-    verbose("AveragesData", file, save=true)
-    f = open(file, "w")
-    for i in eachindex(data.range)
-        println(f, data.field[i], "    ", data.range[i])
-    end
-    close(f)
-    return nothing
 end
 
 
