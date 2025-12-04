@@ -34,15 +34,6 @@ using .Tools
     export shiftgrid!, transform_grid
     export search_inifile
 
-include("Visualization.jl")
-using .Visualization
-    export visualize
-    export animate
-    export heatmap, lines
-    export save_for_LaTeX
-    export save_visualize
-    export add_BgPlot!
-
 include("Physics.jl")
 using .Physics
     export vorticity, enstrophy, Ri, tke
