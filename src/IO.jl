@@ -6,15 +6,16 @@ using ..DataStructures
 export load, load!, loadgrid
 export init
 
+let 
+# ------------------------------------------------------------------------------
+#                                   API
+# ------------------------------------------------------------------------------
 
-# ------------------------------------------------------------------------------
-#                           API (exported functions)
-# ------------------------------------------------------------------------------
 """
     loadgrid(gridfile) -> Grid
 Loads the grid data from the file _gridfile_ into the composite type _grid_.
 """
-loadgrid(gridfile::String)::Grid = Grid_from_gridfile(gridfile)
+global loadgrid(gridfile::String)::Grid = _Grid_from_gridfile(gridfile)
 
 
 """
@@ -33,12 +34,10 @@ type _VectorData_.
 Load the data contained in the path _file_ into the type _AveragesData_.
 _file_ has to be NetCDF file containing the averages from _average.x_.
 """
-load(file::String)::ScalarData = ScalarData_from_file(file)
-load(dir::String, field::String, time::Real; component::String=".0")::ScalarData = load(file_for_time(dir, time, field, component))
-
-load(xfile::String, yfile::String, zfile::String)::VectorData = VectorData_from_files(xfile, yfile, zfile)
-
-load(file::String, var::String)::AveragesData = AveragesData_from_NetCDF(file, var)
+global load(file::String)::ScalarData = _ScalarData_from_file(file)
+global load(dir::String, field::String, time::Real; component::String=".0")::ScalarData = load(_file_for_time(dir, time, field, component))
+global load(xfile::String, yfile::String, zfile::String)::VectorData = _VectorData_from_files(xfile, yfile, zfile)
+global load(file::String, var::String)::AveragesData = AveragesData_from_NetCDF(file, var)
 
 
 """
@@ -46,11 +45,11 @@ load(file::String, var::String)::AveragesData = AveragesData_from_NetCDF(file, v
 Version of _load_ for preallocated data container. This function does not 
     update the grid attribute!
 """
-load!(data::ScalarData, file::String) = ScalarData_from_file!(data, file)
-load!(
+global load!(data::ScalarData, file::String) = _ScalarData_from_file!(data, file)
+global load!(
     data::VectorData, 
     xfile::String, yfile::String, zfile::String
-) = VectorData_from_file!(data, xfile, yfile, zfile)
+) = _VectorData_from_file!(data, xfile, yfile, zfile)
 
 
 """
@@ -59,7 +58,7 @@ Initialize an empty data container. dims has to be an integer in of value
 1 or 3. 1 correpsonds to _ScalarData_ while 3 returns _VectorData_. 
 Default for _dims_ is 1. _grid_ has to be of type _Grid_.
 """
-function init(
+global function init(
         grid::Grid{T,I};
         dims::Int=1
     )::AbstractData where {T<:AbstractFloat, I<:Signed}
@@ -83,7 +82,7 @@ function init(
 end
 
 
-function init(gridfile::String; dims::Int=1, T::Type=Float64)::AbstractData
+global function init(gridfile::String; dims::Int=1, T::Type=Float64)::AbstractData
     return init(convert(T, loadgrid(gridfile)), dims=dims)
 end
 
@@ -94,7 +93,7 @@ end
 """ 
     Load the file _grid_ into composite type _Grid_
 """
-function Grid_from_gridfile(gridfile::String)::Grid
+function _Grid_from_gridfile(gridfile::String)::Grid
     "f90_record_markers from the amount of write commands in storing routine "
     io = open(gridfile, "r")
     marker1 = read(io, Int32)
@@ -128,9 +127,9 @@ function Grid_from_gridfile(gridfile::String)::Grid
 end
 
 
-function Grid_from_file(dir::String)::Grid
+function _Grid_from_file(dir::String)::Grid
     gridfile = joinpath(dir, "grid")
-    return Grid_from_gridfile(gridfile)
+    return _Grid_from_gridfile(gridfile)
 end
 
 
@@ -140,20 +139,20 @@ end
 """
     Loading data that is stored in a single file.
 """
-function ScalarData_from_file(fieldfile::String)::ScalarData
+function _ScalarData_from_file(fieldfile::String)::ScalarData
     verbose("ScalarData", fieldfile)
     filename = split(fieldfile, "/")[end]
     if startswith(filename, "flow.") || startswith(filename, "scal.")
-        return ScalarData_from_raw(fieldfile)
+        return _ScalarData_from_raw(fieldfile)
     else
-        return ScalarData_from_visuals(fieldfile)
+        return _ScalarData_from_visuals(fieldfile)
     end
 end
 
 
-function ScalarData_from_raw(fieldfile::String)::ScalarData{Float64, Int32}
-    grid = Grid_from_file(dirname(fieldfile))
-    buffer, t = Array_from_rawfile(grid, fieldfile)
+function _ScalarData_from_raw(fieldfile::String)::ScalarData{Float64, Int32}
+    grid = _Grid_from_file(dirname(fieldfile))
+    buffer, t = _Array_from_rawfile(grid, fieldfile)
     return ScalarData(
         name = splitpath(fieldfile)[end],
         grid = grid,
@@ -163,18 +162,18 @@ function ScalarData_from_raw(fieldfile::String)::ScalarData{Float64, Int32}
 end
 
 
-function ScalarData_from_visuals(fieldfile::String)::ScalarData{Float32, Int32}
-    grid = convert(Float32, Grid_from_file(dirname(fieldfile)))
+function _ScalarData_from_visuals(fieldfile::String)::ScalarData{Float32, Int32}
+    grid = convert(Float32, _Grid_from_file(dirname(fieldfile)))
     return ScalarData(
         name = splitpath(fieldfile)[end],
         grid = grid,
-        time = time_from_file(fieldfile),
-        field = Array_from_file(grid, fieldfile)
+        time = _time_from_file(fieldfile),
+        field = _Array_from_file(grid, fieldfile)
     )
 end
 
 
-function ScalarData_from_file!(data::ScalarData, fieldfile::String)
+function _ScalarData_from_file!(data::ScalarData, fieldfile::String)
     filename = split(fieldfile, "/")[end]
     if eltype(data)[1]==Float64 && !(startswith(filename, "flow.") || startswith(filename, "scal."))
         error(
@@ -190,10 +189,10 @@ function ScalarData_from_file!(data::ScalarData, fieldfile::String)
     verbose("ScalarData", fieldfile)
     data.name = filename
     if startswith(filename, "flow.") || startswith(filename, "scal.")
-        data.field, data.time = Array_from_rawfile(data.grid, fieldfile)
+        data.field, data.time = _Array_from_rawfile(data.grid, fieldfile)
     else
-        data.time = time_from_file(fieldfile)
-        data.field .= Array_from_file(data.grid, fieldfile)
+        data.time = _time_from_file(fieldfile)
+        data.field .= _Array_from_file(data.grid, fieldfile)
     end
     return nothing
 end
@@ -205,7 +204,7 @@ end
 """
     Loading data from three files. No check for physical consistency.
 """
-function VectorData_from_files(
+function _VectorData_from_files(
         xfieldfile::String,
         yfieldfile::String,
         zfieldfile::String
@@ -213,49 +212,49 @@ function VectorData_from_files(
     verbose("VectorData", xfieldfile, yfieldfile, zfieldfile)
     filename = split(xfieldfile, "/")[end]
     if startswith(filename, "flow.") || startswith(filename, "scal.")
-        return VectorData_from_raw(xfieldfile, yfieldfile, zfieldfile)
+        return _VectorData_from_raw(xfieldfile, yfieldfile, zfieldfile)
     else
-        return VectorData_from_visuals(xfieldfile, yfieldfile, zfieldfile)
+        return _VectorData_from_visuals(xfieldfile, yfieldfile, zfieldfile)
     end
 end
 
 
-function VectorData_from_raw(
+function _VectorData_from_raw(
         xfieldfile::String,
         yfieldfile::String,
         zfieldfile::String
     )::VectorData{Float64, Int32}
-    grid = Grid_from_file(dirname(xfieldfile))
-    buffer, t = Array_from_rawfile(grid, xfieldfile)
+    grid = _Grid_from_file(dirname(xfieldfile))
+    buffer, t = _Array_from_rawfile(grid, xfieldfile)
     return VectorData(
         name = string(splitpath(xfieldfile)[end][1:end-2]),
         grid = grid,
         time = t,
         xfield = buffer,
-        yfield = Array_from_rawfile(grid, yfieldfile)[1],
-        zfield = Array_from_rawfile(grid, zfieldfile)[1]
+        yfield = _Array_from_rawfile(grid, yfieldfile)[1],
+        zfield = _Array_from_rawfile(grid, zfieldfile)[1]
     )
 end
 
 
-function VectorData_from_visuals(
+function _VectorData_from_visuals(
         xfieldfile::String,
         yfieldfile::String,
         zfieldfile::String
     )
-    grid = convert(Float32, Grid_from_file(dirname(xfieldfile)))
+    grid = convert(Float32, _Grid_from_file(dirname(xfieldfile)))
     return VectorData(
         name = string(splitpath(xfieldfile)[end][1:end-2]),
         grid = grid,
-        time = time_from_file(xfieldfile),
-        xfield = Array_from_file(grid, xfieldfile),
-        yfield = Array_from_file(grid, yfieldfile),
-        zfield = Array_from_file(grid, zfieldfile)
+        time = _time_from_file(xfieldfile),
+        xfield = _Array_from_file(grid, xfieldfile),
+        yfield = _Array_from_file(grid, yfieldfile),
+        zfield = _Array_from_file(grid, zfieldfile)
     )
 end
 
 
-function VectorData_from_files!(
+function _VectorData_from_files!(
         data::VectorData, 
         xfieldfile::String,
         yfieldfile::String,
@@ -276,14 +275,14 @@ function VectorData_from_files!(
     verbose("VectorData", xfieldfile, yfieldfile, zfieldfile)
     data.name = string(splitpath(xfieldfile)[end][1:end-2])
     if startswith(filename, "flow.") || startswith(filename, "scal.")
-        data.xfield, data.time = Array_from_rawfile(data.grid, xfieldfile)
-        data.yfield .= Array_from_rawfile(data.grid, yfieldfile)[1]
-        data.zfield .= Array_from_rawfile(data.grid, zfieldfile)[1]
+        data.xfield, data.time = _Array_from_rawfile(data.grid, xfieldfile)
+        data.yfield .= _Array_from_rawfile(data.grid, yfieldfile)[1]
+        data.zfield .= _Array_from_rawfile(data.grid, zfieldfile)[1]
     else
-        data.time = time_from_file(fieldfile)
-        data.xfield .= Array_from_file(data.grid, xfieldfile)
-        data.yfield .= Array_from_file(data.grid, yfieldfile)
-        data.zfield .= Array_from_file(data.grid, zfieldfile)
+        data.time = _time_from_file(fieldfile)
+        data.xfield .= _Array_from_file(data.grid, xfieldfile)
+        data.yfield .= _Array_from_file(data.grid, yfieldfile)
+        data.zfield .= _Array_from_file(data.grid, zfieldfile)
     end
     return nothing
 end
@@ -295,7 +294,7 @@ end
 """
     Load array from a binary file according to the information in _grid_.
 """
-function Array_from_file(
+function _Array_from_file(
         grid::Grid{T,I}, fieldfile::String
     )::Array{T,3} where {T<:AbstractFloat, I<:Signed}
     buffer = Vector{T}(undef, grid.nx*grid.ny*grid.nz)
@@ -304,7 +303,7 @@ function Array_from_file(
 end
  
 
-function Array_from_rawfile(
+function _Array_from_rawfile(
         grid::Grid{T,I}, fieldfile::String
     )::Tuple{Array{T, 3}, Float64} where {T<:AbstractFloat, I<:Signed}
     io = open(fieldfile, "r")
@@ -339,7 +338,7 @@ end
 # ------------------------------------------------------------------------------
 #                             Helping functions
 # ------------------------------------------------------------------------------
-function timestep_from_filename(filename::String)::Int
+function _timestep_from_filename(filename::String)::Int
     namestring = split(filename, "/")[end]
     namestring = split(namestring, ".")[1]
     stepstring = namestring[end-5:end]
@@ -347,21 +346,21 @@ function timestep_from_filename(filename::String)::Int
 end
 
 
-function time_from_timestep(timestep::Int, dir::String)::AbstractFloat
+function _time_from_timestep(timestep::Int, dir::String)::AbstractFloat
     avgfile = "avg"*string(timestep)*".nc"
     avgfile = joinpath(dir, avgfile)
     return ncread(avgfile, "t")[1]
 end
 
 
-function time_from_file(file::String)::Float32
-    tstep = timestep_from_filename(file)
-    t = time_from_timestep(tstep, dirname(file))
+function _time_from_file(file::String)::Float32
+    tstep = _timestep_from_filename(file)
+    t = _time_from_timestep(tstep, dirname(file))
     return t
 end
 
 
-function file_for_time(
+function _file_for_time(
         dir::String, 
         time::Real,
         field::String,
@@ -387,7 +386,7 @@ function file_for_time(
         end
         if correct_field
             file = joinpath(dir, filename)
-            t = time_from_file(file)
+            t = _time_from_file(file)
             printstyled("   ", filename, "    ", t, "\n", color=:cyan)
             if abs(time - t) < Δt
                 f = file
@@ -418,6 +417,9 @@ end
 function done()
     printstyled("   Done \n", color=:green)
 end
+
+
+end # end of let encapsulation
 
 
 end

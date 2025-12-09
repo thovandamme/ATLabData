@@ -1,5 +1,5 @@
 """
-Module to load, process and visualise data from ATLab in Julia.
+Module to load and process data from ATLab in Julia.
 """
 module ATLabData
 
@@ -31,7 +31,7 @@ using .Statistics
 
 include("Tools.jl")
 using .Tools
-    export shiftgrid!, transform_grid
+    export shiftgrid!, transform_grid, calculate_grid, GridMapping
     export search_inifile
 
 include("Physics.jl")

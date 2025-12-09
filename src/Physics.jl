@@ -1,7 +1,6 @@
 module Physics
 
 using ..DataStructures
-# using ..DataOperations
 using ..IO
 
 export vorticity, enstrophy, Ri, tke

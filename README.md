@@ -66,14 +66,3 @@ data = load("/path/to/file")
 meandata = mean(data)
 flucsdata = flucs(data)
 ```
-
-## Visualization
-The package includes a heatmap overload for quick visualization utilizing 
-CairoMakie:  
-```
-    data = load("/path/to/dir/bPrime00000")
-    fig, ax, hm = heatmap(data)
-``` 
-is an overload of _heatmap_ from CairoMakie for _ScalarData_ 
-
-`visualize(data)` is a shortcut for `fig, ax, hm = heatmap(data); display(fig)`
