@@ -8,10 +8,11 @@ using ..IO: init
 export GridMapping
 export shiftgrid!, transform_grid, calculate_grid
 export search_inifile
+export to_single_precision
 
 
 module GridMapping
-    using Interpolations, ForwardDiff, ..DataStructures
+    using ..Interpolations, ForwardDiff, ..DataStructures
 
     export mapping, spacing, stretching
 
@@ -20,22 +21,20 @@ module GridMapping
         C = - profile(0, h1h0, δ1, st1) - profile(0, h2h0, δ2, st2)
         s + profile(s, h1h0, δ1, st1) + profile(s, h2h0, δ2, st2) + C
     end
+    
     @inline spacing(nodes, z) = begin
         itp = linear_interpolation(nodes, z, extrapolation_bc = Line())
         return ForwardDiff.derivative.(Ref(itp), nodes)
     end
-    @inline spacing(grid::Grid) = begin
-        return spacing(range(1:grid.nz), grid.z)
-    end
-    @inline spacing(z) = spacing(range(1:length(z)), z)
+    @inline spacing(grid::Grid) = spacing(1:grid.nz, grid.z)
+    @inline spacing(z::Vector{<:AbstractFloat}) = spacing(1:length(z), z)
+
     @inline stretching(nodes, z) = begin
         itp = linear_interpolation(nodes, spacing(nodes, z), extrapolation_bc = Line())
         return ForwardDiff.derivative.(Ref(itp), nodes) ./ spacing(nodes, z) .* 100
     end
-    @inline stretching(grid::Grid) = begin
-        return stretching(reange(1:grid.nz), grid.z)
-    end
-    @inline stretching(z) = stretching(range(a:length(z)), z)
+    @inline stretching(grid::Grid) = stretching(1:grid.nz, grid.z)
+    @inline stretching(z::Vector{<:AbstractFloat}) = stretching(1:length(z), z)
 end
 
 
@@ -44,6 +43,7 @@ using .GridMapping
 
 let
     """
+        transform_grid(data, newgrid)
     Transform the grid of _data_ in _grid_. _shift_ corresponds to the axes given 
     in _shiftaxis_.
     """
@@ -116,7 +116,7 @@ end
 
 """
     shiftgrid!(data, shift, axis)
-Shift the grid of _data_ by _shift along _axis_, i.e. each point of _axis_ is 
+Shift the grid of _data_ by _shift_ along _axis_, i.e. each point of _axis_ is 
 added by _shift_.
 """
 function shiftgrid!(data::ScalarData, shift::AbstractFloat; axis::Symbol=:z)
@@ -277,6 +277,38 @@ function search_inifile(file::String, block::String, key::String)::String
     end
     close(f)
     return res
+end
+
+
+"""
+    to_single_precision(file1, file2)
+Reads _file1_, converts the field data from Float64 to Float32 and stores 
+to file2. Purpose is that field files can be used with the 
+FileDataType=Single options in tlab.ini, if the data is originally saved 
+in double precission.
+"""
+function to_single_precision(infile::String, outfile::Union{String, SubString})
+    # Reading the infile
+    istream = open(infile, "r")
+    headersize = read(istream, Int32) # 4 bytes
+    steps = Vector{Int32}(undef, 4) # step[:]=[nx,ny,nz,nt] corresponds to 4*4=16 bytes
+    for i ∈ eachindex(steps)
+        steps[i] = read(istream, Int32)
+    end
+    params = Vector{Float64}(undef, (headersize - 5*sizeof(headersize))÷sizeof(Float64))
+    for i ∈ eachindex(params)
+        params[i] = read(istream, eltype(params))
+    end
+    field = Vector{Float64}(undef, steps[1]*steps[2]*steps[3])
+    read!(istream, field)
+    close(istream)
+    # Writing in single precission to outfile
+    open(outfile, "w") do ostream
+        write(ostream, headersize)
+        write(ostream, steps)
+        write(ostream, params)
+        write(ostream, convert(Vector{Float32}, field))
+    end
 end
 
 

@@ -19,7 +19,7 @@ global loadgrid(gridfile::String)::Grid = _Grid_from_gridfile(gridfile)
 
 
 """
-    load(file) -> ScalarData
+    load(file, prec) -> ScalarData
 Load the data contained in the path _file_ into the type _Data_.
 
     load(dir, field, time) -> ScalarData
@@ -34,9 +34,9 @@ type _VectorData_.
 Load the data contained in the path _file_ into the type _AveragesData_.
 _file_ has to be NetCDF file containing the averages from _average.x_.
 """
-global load(file::String)::ScalarData = _ScalarData_from_file(file)
+global load(file::String; prec::Type=Float64)::ScalarData = _ScalarData_from_file(file, prec)
 global load(dir::String, field::String, time::Real; component::String=".0")::ScalarData = load(_file_for_time(dir, time, field, component))
-global load(xfile::String, yfile::String, zfile::String)::VectorData = _VectorData_from_files(xfile, yfile, zfile)
+global load(xfile::String, yfile::String, zfile::String; prec::Type=Float64)::VectorData = _VectorData_from_files(xfile, yfile, zfile, prec)
 global load(file::String, var::String)::AveragesData = AveragesData_from_NetCDF(file, var)
 
 
@@ -139,19 +139,21 @@ end
 """
     Loading data that is stored in a single file.
 """
-function _ScalarData_from_file(fieldfile::String)::ScalarData
+function _ScalarData_from_file(fieldfile::String, type::Type)::ScalarData
     verbose("ScalarData", fieldfile)
     filename = split(fieldfile, "/")[end]
     if startswith(filename, "flow.") || startswith(filename, "scal.")
-        return _ScalarData_from_raw(fieldfile)
+        return _ScalarData_from_raw(fieldfile, type)
     else
         return _ScalarData_from_visuals(fieldfile)
     end
 end
 
 
-function _ScalarData_from_raw(fieldfile::String)::ScalarData{Float64, Int32}
-    grid = _Grid_from_file(dirname(fieldfile))
+function _ScalarData_from_raw(
+        fieldfile::String, T::Type
+    )::ScalarData{T, Int32}
+    grid = convert(T, _Grid_from_file(dirname(fieldfile)))
     buffer, t = _Array_from_rawfile(grid, fieldfile)
     return ScalarData(
         name = splitpath(fieldfile)[end],
@@ -207,12 +209,13 @@ end
 function _VectorData_from_files(
         xfieldfile::String,
         yfieldfile::String,
-        zfieldfile::String
+        zfieldfile::String,
+        prec::Type
     )::VectorData
     verbose("VectorData", xfieldfile, yfieldfile, zfieldfile)
     filename = split(xfieldfile, "/")[end]
     if startswith(filename, "flow.") || startswith(filename, "scal.")
-        return _VectorData_from_raw(xfieldfile, yfieldfile, zfieldfile)
+        return _VectorData_from_raw(xfieldfile, yfieldfile, zfieldfile, prec)
     else
         return _VectorData_from_visuals(xfieldfile, yfieldfile, zfieldfile)
     end
@@ -222,9 +225,10 @@ end
 function _VectorData_from_raw(
         xfieldfile::String,
         yfieldfile::String,
-        zfieldfile::String
-    )::VectorData{Float64, Int32}
-    grid = _Grid_from_file(dirname(xfieldfile))
+        zfieldfile::String,
+        T::Type
+    )::VectorData{T, Int32}
+    grid = convert(T,_Grid_from_file(dirname(xfieldfile)))
     buffer, t = _Array_from_rawfile(grid, xfieldfile)
     return VectorData(
         name = string(splitpath(xfieldfile)[end][1:end-2]),
@@ -305,7 +309,7 @@ end
 
 function _Array_from_rawfile(
         grid::Grid{T,I}, fieldfile::String
-    )::Tuple{Array{T, 3}, Float64} where {T<:AbstractFloat, I<:Signed}
+    )::Tuple{Array{T, 3}, T} where {T<:AbstractFloat, I<:Signed}
     io = open(fieldfile, "r")
     """ 
         Header contains: 
@@ -316,7 +320,7 @@ function _Array_from_rawfile(
     seek(io, 5*sizeof(headersize))
     time = read(io, Float64)
     seek(io, headersize) # Jump to first last entry belonging to the header
-    buffer = Vector{Float64}(undef, grid.nx*grid.ny*grid.nz)
+    buffer = Vector{T}(undef, grid.nx*grid.ny*grid.nz)
     read!(io, buffer)
     return reshape(buffer, (grid.nx, grid.ny, grid.nz)), time
 end

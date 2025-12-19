@@ -33,6 +33,7 @@ include("Tools.jl")
 using .Tools
     export shiftgrid!, transform_grid, calculate_grid, GridMapping
     export search_inifile
+    export to_single_precision
 
 include("Physics.jl")
 using .Physics
