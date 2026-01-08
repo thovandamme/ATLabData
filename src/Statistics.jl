@@ -41,7 +41,7 @@ function average(data::ScalarData; coord=3)::AveragesData
         error("coord has be in {1,2,3}")
     end
     name = "avg$coord($(data.name))"
-    return AveragesData(name=name, time=data.time, range=range, field=res)
+    return AveragesData(name=name, time=data.time, z=range, field=res)
 end
 
 
@@ -75,7 +75,7 @@ function rms(data::ScalarData; coord=3)::AveragesData
         error("Give coord as Int in {1,2,3}.")
     end
     name = "rms$(coord)($(data.name))"
-    return AveragesData(name=name, time=data.time, range=range, field=res)
+    return AveragesData(name=name, time=data.time, z=range, field=res)
 end
 
 
@@ -166,7 +166,9 @@ function wave(data::ScalarData, mode::Int)::ScalarData
     mfield = mean(data).field
     wfield = zeros(eltype(data.field), size(data.field))
     for k ∈ 1:data.grid.nz
-        wfield[:,:,k] .= phase_average(data.field[:,1,k], mode) .- mfield[:,1,k]
+        for j ∈ 1:data.grid.ny
+            wfield[:,j,k] .= phase_average(data.field[:,j,k], mode) .- mfield[:,j,k]
+        end
     end
     return ScalarData("wave($(data.name))", data.grid, data.time, wfield)
 end
@@ -210,7 +212,6 @@ function turbulence!(data::ScalarData, modes::Vector{Int})
     flucs!(data)
     data.name = "turb($(data.name))"
 end
-
 
 
 function phase_average(vec::Vector{<:AbstractFloat}, mode::Int)

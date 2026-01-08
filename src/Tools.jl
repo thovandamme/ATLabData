@@ -23,14 +23,20 @@ module GridMapping
     end
     
     @inline spacing(nodes, z) = begin
-        itp = linear_interpolation(nodes, z, extrapolation_bc = Line())
+        itp = extrapolate(
+            interpolate((nodes,), z, Gridded(Linear())), 
+            Line()
+        )
         return ForwardDiff.derivative.(Ref(itp), nodes)
     end
     @inline spacing(grid::Grid) = spacing(1:grid.nz, grid.z)
     @inline spacing(z::Vector{<:AbstractFloat}) = spacing(1:length(z), z)
 
     @inline stretching(nodes, z) = begin
-        itp = linear_interpolation(nodes, spacing(nodes, z), extrapolation_bc = Line())
+        itp = extrapolate(
+            interpolate((nodes,), spacing(nodes, z), Gridded(Linear())), 
+            Line()
+        )
         return ForwardDiff.derivative.(Ref(itp), nodes) ./ spacing(nodes, z) .* 100
     end
     @inline stretching(grid::Grid) = stretching(1:grid.nz, grid.z)
@@ -308,6 +314,77 @@ function to_single_precision(infile::String, outfile::Union{String, SubString})
         write(ostream, steps)
         write(ostream, params)
         write(ostream, convert(Vector{Float32}, field))
+    end
+end
+
+
+"""
+    to_single_precision!(field, infile, outfile)
+Muating variant of to_single_precision. Does not allocate _field_ but 
+writes into the given array. Might be helpful for processing multiple files ...
+"""
+function to_single_precision!(
+        field::Vector{<:AbstractFloat}, 
+        infile::String, 
+        outfile::Union{String, SubString}
+    )
+    # Reading the infile
+    istream = open(infile, "r")
+    headersize = read(istream, Int32) # 4 bytes
+    steps = Vector{Int32}(undef, 4) # step[:]=[nx,ny,nz,nt] corresponds to 4*4=16 bytes
+    for i ∈ eachindex(steps)
+        steps[i] = read(istream, Int32)
+    end
+    params = Vector{Float64}(undef, (headersize - 5*sizeof(headersize))÷sizeof(Float64))
+    for i ∈ eachindex(params)
+        params[i] = read(istream, eltype(params))
+    end
+    read!(istream, field)
+    close(istream)
+    # Writing in single precission to outfile
+    open(outfile, "w") do ostream
+        write(ostream, headersize)
+        write(ostream, steps)
+        write(ostream, params)
+        write(ostream, convert(Vector{Float32}, field))
+    end
+end
+
+
+function to_single_precision(
+        infiles::Vector{String}, 
+        outfile::Union{Vector{String}, Vector{SubString}}
+    )
+    """
+        This function preallocates buffer arrays and therefore assumes that 
+        only the data changes, thus all files have the same grid.
+    """
+    # TODO not working ...
+    # Preallocation with first infile
+    istream = open(infile, "r")
+    headersize = read(istream, Int32) # 4 bytes
+    steps = Vector{Int32}(undef, 4) # step[:]=[nx,ny,nz,nt] corresponds to 4*4=16 bytes
+    params = Vector{Float64}(undef, (headersize - 5*sizeof(headersize))÷sizeof(Float64))
+    field = Vector{Float64}(undef, steps[1]*steps[2]*steps[3])
+    close(istream)
+    
+    # Do the precision transformation
+    for infile ∈ infiles
+        open(infile, "r") do istream
+            for i ∈ eachindex(steps)
+                steps[i] = read(istream, Int32)
+            end
+            for i ∈ eachindex(params)
+                params[i] = read(istream, eltype(params))
+            end
+            read!(istream, field)
+        end        
+        open(outfile, "w") do ostream
+            write(ostream, headersize)
+            write(ostream, steps)
+            write(ostream, params)
+            write(ostream, convert(Vector{Float32}, field))
+        end
     end
 end
 

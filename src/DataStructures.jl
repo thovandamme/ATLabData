@@ -67,14 +67,14 @@ AveragesData(;
     z::Vector{<:AbstractFloat},
     field::Array{<:AbstractFloat, 2}
 ) = AveragesData(
-        name, time, 
-        Grid{eltype(time), Int}(
-            1, 1, length(z), 
-            0.0, 0.0, z[end],
-            [0.0], [0.0], z
-        ),
-        field
-    )
+    name, time, 
+    Grid{eltype(time), Int}(
+        1, 1, length(z), 
+        0.0, 0.0, z[end],
+        [0.0], [0.0], z
+    ),
+    field
+)
 
 
 function Base.getindex(data::ScalarData, i::Int, j::Int, k::Int)

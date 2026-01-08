@@ -42,7 +42,7 @@ Does the same as '''subtract(data1, data2)'''
 -(data1::AveragesData, data2::AveragesData)::AveragesData = AveragesData(
     name = "$(data1.name)-$(data2.name)",
     time = data1.time,
-    range = data1.range,
+    z = data1.grid.z,
     field = data1.field .- data2.field
 )
 
@@ -68,7 +68,7 @@ Add the _fields_ of _data1_ and _data2_. Does the same as '''add(data1, data2)''
 +(data1::AveragesData, data2::AveragesData)::AveragesData = AveragesData(
     name = "$(data1.name)+$(data2.name)",
     time = data1.time,
-    range = data1.range,
+    z = data1.grid.z,
     field = data1.field .+ data2.field
 )
 
@@ -97,7 +97,7 @@ Vectorized multiplication of the fields of _data1_ and _data2_
 *(data::AveragesData, factor::Real)::AveragesData = AveragesData(
     name = data.name,
     time = data.time,
-    range = data.range,
+    z = data.grid.z,
     field = data.field .* convert(Float32, factor)
 )
 *(data1::ScalarData, data2::ScalarData)::ScalarData = ScalarData(
@@ -109,7 +109,7 @@ Vectorized multiplication of the fields of _data1_ and _data2_
 *(data1::AveragesData, data2::AveragesData) = AveragesData(
     name = "$(data1.name)*$(data2.name)",
     time = data1.time,
-    range = data1.range,
+    z = data1.grid.z,
     field = data1.field .* data2.field
 )
 *(factor::Real, data::AbstractData)::AbstractData = data*factor
@@ -139,7 +139,7 @@ Vectorized division of the fields of _data1_ and _data2_.
 /(data::AveragesData, factor::Real)::AveragesData = AveragesData(
     name = data.name,
     time = data.time,
-    range = data.range,
+    z = data.grid.z,
     field = data.field ./ convert(Float32, factor)
 )
 /(data1::ScalarData, data2::ScalarData)::ScalarData = ScalarData(
@@ -151,7 +151,7 @@ Vectorized division of the fields of _data1_ and _data2_.
 /(data1::AveragesData, data2::AveragesData) = AveragesData(
     name = "$(data1.name)*$(data2.name)",
     time = data1.time,
-    range = data1.grid,
+    z = data1.grid,
     field = data1.field ./ data2.field
 )
 
@@ -170,7 +170,7 @@ maintaining the metadata.
 ^(data::AveragesData, exponent::Real)::AveragesData = AveragesData(
     name = data.name, 
     time = data.time, 
-    range = data.range,
+    z = data.grid.z,
     field = data.field.^exponent
 )
 
@@ -212,6 +212,22 @@ log(data::ScalarData) = ScalarData(
     grid = data.grid,
     field = replace(log.(data.field), Inf=>0.0, -Inf=>0.0)
 )
+
+
+sqrt(data::ScalarData) = ScalarData(
+    name = "√($(data.name))",
+    time = data.time,
+    grid = data.grid,
+    field = sqrt.(data.field)
+)
+
+
+# maximum(data::AveragesData{T,I}) where {T<:AbstractFloat} = maximum(data.field)
+# maximum(data::ScalarData{T,I}) where {T<:AbstractFloat} = maximum(data.field)
+
+
+# minimum(data::AveragesData{T,I}) where {T<:AbstractFloat} = minimum(data.field)
+# minimum(data::ScalarData{T,I}) where {T<:AbstractFloat} = minimum(data.field)
 
 
 """
@@ -283,7 +299,7 @@ end
 function display(data::AveragesData)
     println(typeof(data), " with attributes: ")
     print("   name: "); println(data.name)
-    print("   range: "); println(typeof(data.grid.z))
+    print("   z: "); println(typeof(data.grid.z))
     print("   field: "); println(typeof(data.field))
     print("   time: "); println(data.time)
 end

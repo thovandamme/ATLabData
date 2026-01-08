@@ -1,9 +1,10 @@
 module Physics
 
-using ..DataStructures
-using ..IO
+using ..DataStructures, ..IO, ..Basics, ..Statistics
 
-export vorticity, enstrophy, Ri, tke
+using ForwardDiff
+
+export vorticity, enstrophy, Ri, tke, TurbulenceScales
 
 
 """
@@ -91,6 +92,45 @@ function tke(data::VectorData)::ScalarData
         0.5f0 .* (buffer.xfield.^2 .+ buffer.yfield.^2 .+ buffer.zfield.^2)
     )
 end
+
+
+function turbulent_diffusivity(
+        flux::AveragesData, 
+        mean::AveragesData;
+        axis::Vector{<:AbstractFloat} = mean.grid.z
+    )::AveragesData
+    return AveragesData(
+        name = "turbDiff($(flux.name))",
+        time = flux.time,
+        z = axis,
+        field = turbulent_diffusivity(flux.field, mean.field, axis=axis)
+    )
+end
+
+
+function turbulent_diffusivity(
+        flux::Vector{T}, mean::Vector{T}; axis::Vector{T}
+    )::Vector{T} where {T<:AbstractFloat}
+    return - flux ./ ForwardDiff.derivative.(mean, axis)
+end
+
+
+"""
+    vertical_flux(w, f) -> ⟨wf⟩
+Returns the vertical flux of _f_ with _w_ as the vertical velocity component.
+"""
+function vertical_flux(
+        w::ScalarData{T,I}, f::ScalarData{T,I}
+    )::ScalaData{T,I} where {T<:AbstractFloat, I<:Signed}
+    return average(w*f)
+end
+
+
+# module TurbulenceScales
+#     time(tke::AveragesData, ε::AveragesData)::Real = maximum(tke/ε)
+#     length(tke::AveragesData, ε::AveragesData)::Real = maximum(tke^(3/2)/ε)
+#     velocity(tke::AveragesData)::Real = maximum(sqrt(2*tke))
+# end
 
 
 end

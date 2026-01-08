@@ -37,7 +37,7 @@ using .Tools
 
 include("Physics.jl")
 using .Physics
-    export vorticity, enstrophy, Ri, tke
+    export vorticity, enstrophy, Ri, tke, TurbulenceScales
 
 
 function __init__()
