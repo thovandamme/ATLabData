@@ -166,7 +166,9 @@ function calculate_grid(
     println("   lz=$lz, maxstretching=$maxstretching, st1=$st1, nz=$nz")
         
     # Grid points
-    lz0 = nz*lx/nx
+    Nx = nx + 1; Ny = ny + 1
+    Δx = lx/Nx; Δy = ly/Ny
+    lz0 = (nz-1)*Δx
     st2 = lz0 - st1
     s = collect(1:nz)
     z0 = range(0.0, lz0, nz)
@@ -221,31 +223,16 @@ function calculate_grid(
         segments=1
 
         points_1=$nz
-        scales_1=$(nz*lx/nx)
+        scales_1=$(lz0)
         opts_1=Tanh
         vals_1=$(vals_1[1]), $(vals_1[2]), $(vals_1[3]), $(vals_1[4]), $(vals_1[5]), $(vals_1[6])
     ")
 
-    # # Print info about the spacing error
-    # δz = 2*Δz
-    # imin = findmin(abs.(z .- (zs - δz)))[2]
-    # imax = findmin(abs.(z .- (zs + δz)))[2]
-    # err_imin = spacing[imin] - lx/nx
-    # err_imax = spacing[imax] - lx/nx
-    # printstyled("\n Spacing deviation for nz=$nz, st1=$st1, stretching=$stretch: \n", bold=true)
-    # if err_imin > 1.e-4 || err_imax > 1.e-4
-    #     printstyled("  $err_imin  at z=$(z[imin]) \n", color=:light_red)
-    #     printstyled("  $err_imax  at z=$(z[imax]) \n", color=:light_red)
-    # else
-    #     printstyled("  $err_imin  at z=$(z[imin]) \n", color=:cyan)
-    #     printstyled("  $err_imax  at z=$(z[imax]) \n", color=:cyan)
-    # end
-
     return Grid(
         nx=nx, ny=ny, nz=nz,
         lx=lx, ly=ly, lz=lz,
-        x = collect(range(0.0, lx, nx)),
-        y = collect(range(0.0, ly, ny)),
+        x = collect(range(0.0, lx-Δx, nx)),
+        y = collect(range(0.0, ly-Δy, ny)),
         z = mapping.(z0, h1h0, δ1, st1, h2h0, δ2, st2)
     )
 end

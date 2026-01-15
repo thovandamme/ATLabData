@@ -431,4 +431,37 @@ function crop(
 end
 
 
+function _crop(
+        data::ScalarData;
+        xmin = data.grid.x[1], xmax = data.grid.x[end], 
+        ymin = data.grid.y[1], ymax = data.grid.y[end],
+        zmin = data.grid.z[1], zmax = data.grid.z[end]
+    )::ScalarData
+    println("Croping ...")
+    printstyled("   "*data.name, "\n", color=:cyan)
+    imin = findmin(abs.(data.grid.x .- xmin))[2]
+    imax = findmin(abs.(data.grid.x .- xmax))[2]
+    jmin = findmin(abs.(data.grid.y .- ymin))[2]
+    jmax = findmin(abs.(data.grid.y .- ymax))[2]
+    kmin = findmin(abs.(data.grid.k .- zmin))[2]
+    kmax = findmin(abs.(data.grid.k .- zmax))[2]
+    return ScalarData(
+        "crop($(data.name))",
+        Grid{eltype(data)[1], eltype(data)[2]}(
+            imax + 1 - imin,
+            jmax + 1 - jmin,
+            kmax + 1 - kmin,
+            data.grid.x[imax+1] - data.grid.x[imin],
+            data.grid.y[jmax+1] - data.grid.y[jmin],
+            data.grid.z[kmax] - data.grid.z[kmin],
+            data.grid.x[imin:imax],
+            data.grid.y[jmin:jmax],
+            data.grid.z[kmin:kmax]
+        ), 
+        data.time,
+        data.field[imin:imax,jmin:jmax,kmin:kmax],
+    )
+end
+
+
 end
