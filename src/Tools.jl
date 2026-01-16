@@ -1,7 +1,7 @@
 module Tools
 
 using Interpolations
-using SimpleNonlinearSolve
+using NonlinearSolve
 using ..DataStructures
 using ..IO: init
 
@@ -14,14 +14,35 @@ export to_single_precision
 module GridMapping
     using ..Interpolations, ForwardDiff, ..DataStructures
 
-    export mapping, spacing, stretching
+    export mapping, dmapping, ddmapping, dddmapping
+    export spacing, stretching, dstretching, dstretching
 
     @inline profile(s, h1h0, δ1, st1) = (h1h0 - 1)*δ1*log(1 + exp((s - st1)/δ1))
+    @inline dprofile(s, h1h0, δ1, st1) = (h1h0 - 1)/2*(1 + tanh((s - st1)/(2*δ1)))
+    @inline ddprofile(s, h1h0, δ1, st1) = begin
+       (h1h0 - 1)/(4*δ1)*(sech((st1 - s)/(2*δ1)))^2 
+    end
+    @inline dddprofile(s, h1h0, δ1, st1) = begin
+        a = (st1 - s)/(2*δ1)
+        (h1h0 - 1)/(4*δ1^2)*tanh(a)*(sech(a))^2
+    end
+
     @inline mapping(s, h1h0, δ1, st1, h2h0, δ2, st2) = begin
         C = - profile(0, h1h0, δ1, st1) - profile(0, h2h0, δ2, st2)
         s + profile(s, h1h0, δ1, st1) + profile(s, h2h0, δ2, st2) + C
     end
+    @inline dmapping(s, h1h0, δ1, st1, h2h0, δ2, st2) = begin
+        1 + dprofile(s, h1h0, δ1, st1) + dprofile(s, h2h0, δ2, st2)
+    end
+    @inline ddmapping(s, h1h0, δ1, st1, h2h0, δ2, st2) = begin
+        ddprofile(s, h1h0, δ1, st1) + ddprofile(s, h2h0, δ2, st2)
+    end
+    @inline dddmapping(s, h1h0, δ1, st1, h2h0, δ2, st2) = begin
+        dddprofile(s, h1h0, δ1, st1) + dddprofile(s, h2h0, δ2, st2)
+    end
     
+    # NOTE Δz is also available by simple Δz=diff(z), giving the data point margins
+    # But, then length(Δz) = length(z)-1
     @inline spacing(nodes, z) = begin
         itp = extrapolate(
             interpolate((nodes,), z, Gridded(Linear())), 
@@ -32,15 +53,24 @@ module GridMapping
     @inline spacing(grid::Grid) = spacing(1:grid.nz, grid.z)
     @inline spacing(z::Vector{<:AbstractFloat}) = spacing(1:length(z), z)
 
-    @inline stretching(nodes, z) = begin
+    @inline stretching(z) = begin
+        Δz = diff(z)
+        (Δz[2:end] .- Δz[1:end-1])./Δz[1:end-1].*100
+        # With the below variant one gets stretching in the same dimension as z
+        # itp = extrapolate(
+        #     interpolate((collect(1:lenth(z)),), spacing(z), Gridded(Linear())), 
+        #     Line()
+        # )
+        # return ForwardDiff.derivative.(Ref(itp), nodes) ./ spacing(z)
+    end
+    @inline stretching(grid::Grid) = stretching(grid.z)
+    @inline dstretching(z) = begin
         itp = extrapolate(
-            interpolate((nodes,), spacing(nodes, z), Gridded(Linear())), 
+            interpolate((collect(1:length(z)-2),), stretching(z), Gridded(Linear())), 
             Line()
         )
-        return ForwardDiff.derivative.(Ref(itp), nodes) ./ spacing(nodes, z) .* 100
+        ForwardDiff.derivative.(Ref(itp), z)
     end
-    @inline stretching(grid::Grid) = stretching(1:grid.nz, grid.z)
-    @inline stretching(z::Vector{<:AbstractFloat}) = stretching(1:length(z), z)
 end
 
 
@@ -174,12 +204,16 @@ function calculate_grid(
     z0 = range(0.0, lz0, nz)
 
     # Solve the non-linear system defined by f for δ1 and h1h0
-    f(u, p) = [
-        # Eq. for h1h0 with p[1]=lz
-        mapping(lz0, u[1], u[2], st1, u[1], -u[2], st2) .- p[1],
-        # Eq. for δ1 with p[2]=max.stretching
-        maximum(stretching(s, mapping.(z0, u[1], u[2], st1, u[1], -u[2], st2))) .- p[2],
-    ]
+    f(u, p) = begin
+        z() = mapping.(z0, u[1], u[2], st1, u[1], -u[2], st2)
+        str() = stretching(z())
+        [
+            # Eq. for h1h0 with p[1]=lz
+            mapping(lz0, u[1], u[2], st1, u[1], -u[2], st2) .- p[1],
+            # Eq. for δ1 with p[2]=max.stretching
+            maximum(str()) .- p[2]
+        ]
+    end
     problem = NonlinearProblem(
         f, 
         [100.0, -0.4], 
@@ -207,6 +241,123 @@ function calculate_grid(
         PointsSKmax=$(points)
         PointsUKmin=$(points)
         PointsSKmin=$(points)
+        ParametersUKmax=0.25, 3.0
+        ParametersSKmax=0.25, 3.0
+        ParametersUKmin=0.25, 3.0
+        ParametersSKmin=0.25, 3.0
+    ")
+
+    # Print vertical grid info
+    printstyled("
+        [IniGridOz]", 
+        bold = false
+    )
+    println("
+        periodic=no
+        segments=1
+
+        points_1=$nz
+        scales_1=$(lz0)
+        opts_1=Tanh
+        vals_1=$(vals_1[1]), $(vals_1[2]), $(vals_1[3]), $(vals_1[4]), $(vals_1[5]), $(vals_1[6])
+    ")
+
+    return Grid(
+        nx=nx, ny=ny, nz=nz,
+        lx=lx, ly=ly, lz=lz,
+        x = collect(range(0.0, lx-Δx, nx)),
+        y = collect(range(0.0, ly-Δy, ny)),
+        z = mapping.(z0, h1h0, δ1, st1, h2h0, δ2, st2)
+    )
+end
+
+
+function calculate_grid(
+        nx::Int, ny::Int, nz::Int,
+        lx::Real, ly::Real, lz::Real;
+        lower_maxstretching::Real=-2.0,
+        upper_maxstretching::Real=2.0,
+        st1::Real=0.0,
+        Δst2::Real=st1,
+        lower_bufferlength::Real=4*2π/abs(sin(-π/4)),
+        upper_bufferlength::Real=4*2π/abs(sin(-π/4))
+    )::Grid
+    """
+        h0 -> intial uniform grid step
+        h1 -> new maximal grid step after stretching (top of tanh function value)
+        δ1 -> stretching length (tanh width)
+        s -> transition to stretching occuring at s=st1
+
+        Notes on the domain choice:
+        ⋅ Because of parallelization, nz has to be a multiple of 128.
+        ⋅ The grid mapping parameters are computed with Newton-Rhapson for 
+            above specified constraints
+    """
+
+    println("Calculating non-uniform grid ... ")
+        
+    # Grid points
+    Nx = nx + 1; Ny = ny + 1
+    Δx = lx/Nx; Δy = ly/Ny
+    lz0 = (nz-1)*Δx
+    # s = collect(1:nz)
+    z0 = range(0.0, lz0, nz)
+    println("Δx = $Δx")
+    println("Δz = $(z0[2] - z0[1])")
+
+    if (z0[2] - z0[1])!==Δx
+        error("No proper grid init")
+    end
+
+    println(lz0)
+
+    st2 = lz0 - Δst2
+
+    # Solve the non-linear system defined by f for δ1 and h1h0
+    f(u, p) = begin
+        z() = mapping.(z0, u[1], u[2], st1, u[1], u[3], st2)
+        str() = stretching(z())
+        [
+            # Constraint for final domain length with p[1]=lz
+            mapping(lz0, u[1], u[2], st1, u[1], u[3], st2) .- p[1],
+            # Constraint for lower maxstretching with p[2]=lower_maxstretching
+            minimum(str()) .- p[2],
+            # Constraint for upper maxstretching with p[3]=upper_maxstretching
+            maximum(str()) .- p[3],
+        ]
+    end
+    problem = NonlinearProblem(
+        f, 
+        [200.0, -0.7, 0.7], # [h1h0, δ1, δ2] startvalues
+        [lz, lower_maxstretching, upper_maxstretching], # p
+    )
+    solution = solve(problem, NewtonRaphson())
+    h1h0 = solution.u[1]
+    δ1 = solution.u[2]
+    h2h0 = solution.u[1]
+    δ2 = solution.u[3]
+    vals_1 = [st1, h1h0, δ1, st2, h2h0, δ2]
+    z = mapping.(z0, h1h0, δ1, st1, h2h0, δ2, st2)
+
+    # Print buffer info
+    lpoints = findmin(abs.(z .- lower_bufferlength))[2]
+    upoints = length(z) - findmin(abs.(z .- upper_bufferlength))[2]
+    println("   Lower buffer length: $(z[lpoints])")
+    println("   Points=$lpoints")
+    println("   Upper buffer length: $(z[end-upoints])")
+    println("   Points=$upoints")
+
+    printstyled("
+        [BufferZone]",
+        bold = false
+    )
+    println("
+        Type=relaxation
+        LoadBuffer=no
+        PointsUKmax=$(upoints)
+        PointsSKmax=$(upoints)
+        PointsUKmin=$(lpoints)
+        PointsSKmin=$(lpoints)
         ParametersUKmax=0.25, 3.0
         ParametersSKmax=0.25, 3.0
         ParametersUKmin=0.25, 3.0
